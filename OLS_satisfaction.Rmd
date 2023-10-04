@@ -1,0 +1,415 @@
+---
+title: "OLS & interactions: Students'  life satisfaction in Finland"
+author: "Victoria Bolotova"
+date: "20 02 2022"
+output: 
+    html_document:
+      theme: cosmo
+      code_folding: show
+      toc: true
+      toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Introduction
+
+RQ: *What social factors can explain students' life satisfaction in **Finland**?*
+
+- **Control variables:**
+  - `sex`, factor variable 
+  - `AGECAT`, factor variable too
+
+- **Variables' of interest:**
+  - Family's variables, all of them will be converted to continuous type: `famhelp`, `famsup`, `famtalk` 
+  - Friends' variables, all of them will be converted to continuous type: `friendhelp`, `friendcounton`, `friendtalk` 
+  - School' variables, all of them are factors and will stay factors: `teachercare`, `studhelpful`, `likeschool`
+  - Variables that reflect well-being, all of them are factors and will stay factors: `welloff`, `fasholidays`, `fasbedroom`
+
+
+# Data preprocessing
+
+```{r}
+library(dplyr)
+library(foreign)
+library(haven)
+
+initial_df <- read_sav("/Users/victoriabolotova/HSE/HSE 21-22/data_analysis_3rd_year/Practice_OLS/data.sav")
+
+
+initial_df <- initial_df %>% haven::as_factor()
+
+df <- initial_df %>% dplyr::filter(COUNTRYno == "Finland") %>% 
+  dplyr::select(sex, AGECAT, famhelp, famsup, famtalk, friendhelp, friendcounton, friendtalk, teachercare, studhelpful, likeschool, lifesat, welloff, fasholidays, fasbedroom)
+nrow(df)
+```
+Let's delete all missing values
+
+```{r}
+df <- na.omit(df)
+nrow(df)
+```
+Deletion of data points that contain at least 1 NA led to loss of 416 data points. 
+
+I am going to treat some initially factor predictors as continuous because all of them have exactly 7 levels, which is enough to treat them as continuous. Moreover, they are not of nominal type of measurement, as they have an order and the difference between levels is known, it always equals to 1. Thus, let's convert them from factor to numeric. 
+
+```{r}
+df$famsup <- as.numeric(as.factor(df$famsup))
+df$famhelp <- as.numeric(as.factor(df$famhelp))
+df$famtalk <- as.numeric(as.factor(df$famtalk))
+df$friendhelp <- as.numeric(as.factor(df$friendhelp))
+df$friendcounton <- as.numeric(as.factor(df$friendcounton))
+df$friendtalk <- as.numeric(as.factor(df$friendtalk))
+```
+
+Life satisfaction `lifesat` was read as factor variable, but it should be continuous as it is interval type of measurement, so let's convert it from factor to numeric. 
+
+```{r}
+df$lifesat <- as.numeric(as.factor(df$lifesat))
+```
+
+Now the lowest `lifesat` equals to 1 and the highest equals to 11. However, I think it is acceptable as absolutely all values become higher on 1 unit, but everything was converted correctly. 
+
+Now I am going to explore the most basic information about continuous features. 
+
+```{r}
+library(modelsummary)
+datasummary_skim(df, sparse_header=FALSE)
+```
+
+To get an overview of categorical variables:
+
+```{r}
+datasummary_skim(df, type="categorical")
+```
+
+# Model without interaction
+
+```{r}
+library(sjPlot)
+labs_1 <- c("Constant", "Gender (Girl)", 
+                "Age category (13)", "Age category (15)", 
+            "Family help", "Family support", "Family talk", "Friends' help", "Friends count on", "Friends Talk", "Teacher cares (Agree)", "Teacher cares (Neither agree/disagree)", "Teacher cares (Strongly disagree)", "Students are kind and helpful", "Liking school (Like a bit)", "Liking school (Not very much)", "Liking school (Not at all)", "Family well off (Quite well off)", "Family well off (Quite well off)", "Family well off (Average)", "Family well off (Not very well off)", "Family well off (Not at all well off)", "Family holidays (Once)", "Family holidays (Twice)", "Family holidays (More than twice)", "Has own bedroom (Yes)")
+
+model_full <- lm(lifesat ~ sex + AGECAT + famhelp + famsup + famtalk +friendhelp + friendcounton + friendtalk + teachercare + studhelpful + likeschool + welloff + fasholidays + fasbedroom, data = df)
+
+tab_model(model_full, pred.labels = labs_1, dv.labels = "Life Satisfaction", title = "Linear regression: Factors that are associated with life satisfaction")
+```
+
+- p-value & Adjusted R-squared
+
+  - The model fits the data significantly, as F-statistics shows the p-value (2.2e-16) much smaller than 0.05. It means that changes in some explanatory variables (significant ones) are associated with changes in the life satisfaction of pupils at the population level in Finland. 
+  
+  - Adjusted R-squared equals 0.28, it means that 28% of variance in life satisfaction of finnish pupils can be explained by the the model. Thus, I can conclude that the explanatory power is really good, as 28% of the variation in such not easily predictable concept as life satisfaction is completely explained by the model. 
+  
+**Interpretation of the unstandardized coefficients**
+
+- Control variables, both are factors.
+
+  - The predicted life satisfaction for girls is 0.36 lower, than for boys in Finland on average, holding everything else constant.
+  - Age category is not significant at explaining life satisfaction of finnish pupils as p-values are much higher than 0.05 (0.8 and 0.4), so there is no sense to interpret beta coefficients for categories of this variable. 
+  
+  
+  
+- Variables concerned with **family** relationships, all of them are continuous.
+  
+  - Family help (*my family really tries to help me*) is not significant at explaining life satisfaction of adolescents in Finland as p-value is much higher than 0.05 (0.2). 
+  - Family support (*I get the emotional help and support I need from my family*) is not significant at explaining life satisfaction of adolescents in Finland as p-value is a little higher than 0.05 (0.08).
+  - However, family talk (*I can talk about my problems with my family*) is significant at explaining life satisfaction as p-value equals to 2.27e-12. Every one unit increase (from 1 - "Very strongly disagree" to 7 - "Very strongly agree") in finnish adolescents' estimation of whether he or she can talk about their problems with their family leads to 0.2 increase in their life satisfaction on average, holding everything else constant.
+  
+  
+  
+- Variables concerned with **friends** relationships, all of them are continuous.
+  
+  - Friend help (*My friends really try to help me*) is not significant at explaining life satisfaction of adolescents in Finland as p-value is much higher than 0.05 (0.4). 
+  - Friend count on (*I can count on my friends when things go wrong*) is significant at explaining life satisfaction as p-value equals to 0.001. Every one unit increase (from 1 - "Very strongly disagree" to 7 - "Very strongly agree") in finnish adolescents' estimation of whether he or she can count on their friends when things go wrong leads to 0.09 increase in their life satisfaction on average, holding everything else constant.
+  - Friend talk (*I can talk about my problems with my friends*) is not significant at explaining life satisfaction of adolescents in Finland as p-value is higher than 0.05 (0.15).
+  
+  
+  
+- Variable `teachercare`, a factor:
+  
+  - The reference category for a variable `teachercare` (*I feel that my teachers care about me as a person*) is *Strongly Agree*. 
+  - For finnish adolescents who said that they *Agree* with the statement the predicted life satisfaction is lower on 0.13, compared to finnish adolescents who said that they *Strongly Agree* with the statement on average, holding everything else constant.
+  - For finnish adolescents who *Neither agree/disagree* with the statement the predicted life satisfaction is lower on 0.28, compared to those who said that they *Strongly Agree* with the statement on average, holding everything else constant.
+  - For finnish adolescents who *Disagree* with the statement the predicted life satisfaction is lower on 0.68, compared to those who said that they *Strongly Agree* with the statement on average, holding everything else constant.
+  - For finnish adolescents who *Strongly disagree* with the statement the predicted life satisfaction is lower on 0.6, compared to those who said that they *Strongly Agree* with the statement on average, holding everything else constant.
+  
+  
+
+- Variable `studhelpful`, a factor:
+
+  - The reference category for a variable `studhelpful` (*Most of the students in my class(es) are kind and helpful*) is *Strongly Agree*. 
+  - For finnish adolescents who said that they *Agree* with the statement the predicted life satisfaction is lower on 0.1, compared to finnish adolescents who said that they *Strongly Agree* with the statement on average, holding everything else constant.
+  - For finnish adolescents who said that they *Neither agree/disagree* with the statement the predicted life satisfaction is lower on 0.25, compared to finnish adolescents who said that they *Strongly Agree* with the statement on average, holding everything else constant.
+  - For finnish adolescents who said that they *Neither agree/disagree* with the statement the predicted life satisfaction is lower on 0.25, compared to finnish adolescents who said that they *Strongly Agree* with the statement on average, holding everything else constant.
+  - For finnish adolescents who said that they *Disagree* with the statement the predicted life satisfaction is lower on 0.4, compared to finnish adolescents who said that they *Strongly Agree* with the statement on average, holding everything else constant.
+  - For finnish adolescents who said that they *Strongly Disagree* with the statement the predicted life satisfaction is lower on 0.63, compared to finnish adolescents who said that they *Strongly Agree* with the statement on average, holding everything else constant.
+
+
+
+- Variable `likeschool`, a factor:
+
+  - The reference category for a variable `likeschool` (*How do you feel about school at present?*) is *Like a lot*.
+  - For finnish adolescents who said that they *Like a bit* their school the predicted life satisfaction is lower on 0.33, compared to finnish adolescents who said that they like their school a lot on average, holding everything else constant.
+  - For finnish adolescents who said that they like their school *Not very much* the predicted life satisfaction is lower on 0.8, compared to finnish adolescents who said that they like their school a lot on average, holding everything else constant.
+  - For finnish adolescents who said that they like their school *Not at all* the predicted life satisfaction is lower on 1.3, compared to finnish adolescents who said that they like their school a lot on average, holding everything else constant.
+
+- Variable `well-off`, a factor:
+
+  - The reference category for a variable `well-off` (*How well off do you think your family is?*) is *Very well-off*.
+  - For finnish adolescents who think that their family is *Quite well off* the predicted life satisfaction is lower on 0.24, compared to finnish adolescents who think that their family is very well-off on average, holding everything else constant.
+  - For finnish adolescents who think that their family is *Average* well-off the predicted life satisfaction is lower on 0.58, compared to finnish adolescents who think that their family is very well-off on average, holding everything else constant.
+  - For finnish adolescents who think that their family is *Not very well off* the predicted life satisfaction is lower on 1.4, compared to finnish adolescents who think that their is family very well-off on average, holding everything else constant.
+  - For finnish adolescents who think that their family *Not at all well off* the predicted life satisfaction is lower on 1.2, compared to finnish adolescents who think that their family is very well-off on average, holding everything else constant.
+  
+- Variable `fasholidays`, a factor:
+
+  - The reference category for a variable `fasholidays` (*How many times did you and your family travel out of [insert country here] for a holiday/vacation last year?*) is *Not at all*.
+  - Finnish adolescents who traveled out of Finland for a holiday last year once, twice and more than twice are not statistically different in their satisfaction with the life from the adolescents who did not travel out of Finland for a holiday last year at all at the population level as corresponding p-values is higher than or equal to 0.05 (0.13, 0.05, 0.06).
+
+- Variable `fasbedroom`, a factor:
+
+  - Holding everything else constant, for adolescents who have their own bedroom the predicted life satisfaction is higher on 0.1, compared to those, who do not have their own bedroom on average, holding everything else constant. But p-value equals exactly to 0.05. 
+
+
+# Model with interactive effect
+
+Let's try interaction effect between family support and gender, because from the model above we know that gender, which is control variable, is significant at predicting life satisfaction, so I think it is crucial to understand how gender can moderate the effect of explanatory variable of our interest on dependent variable. Girls on average are less satisfied with their life, compared to boys in Finland as model shows, but there should be a reason for such difference. I decided to look at the interaction between gender and family support as the model above demonstrated that family support is not significant at explaining life satisfaction of adolescents, which is really unexpected finding. Therefore, for me it is interesting to explore interaction exactly between these two variables. Moreover, as far as I know from sociological theories, for girls support of family is much more important for well-being than for boys. 
+
+```{r}
+labs_2 <-  c("Constant", "Gender (Girl)", 
+                "Age category (13)", "Age category (15)", 
+            "Family help", "Family support", "Family talk", "Friends' help", "Friends count on", "Friends Talk", "Teacher cares (Agree)", "Teacher cares (Neither agree/disagree)", "Teacher cares (Strongly disagree)", "Students are kind and helpful", "Liking school (Like a bit)", "Liking school (Not very much)", "Liking school (Not at all)", "Family well off (Quite well off)", "Family well off (Quite well off)", "Family well off (Average)", "Family well off (Not very well off)", "Family well off (Not at all well off)", "Family holidays (Once)", "Family holidays (Twice)", "Family holidays (More than twice)", "Has own bedroom (Yes)", "Gender(Girl)*Family support")
+
+
+
+model_interaction <- lm(lifesat ~ sex + AGECAT + famhelp + famsup*sex + famtalk + friendhelp + friendcounton + friendtalk + teachercare + studhelpful + likeschool + welloff + fasholidays + fasbedroom, data = df)
+
+tab_model(model_interaction, pred.labels = labs_2, dv.labels = "Life Satisfaction", title = "Linear regression with interaction: Factors that are associated with life satisfaction")
+```
+
+- Interpretation of the interaction effect:
+  - Interaction effect is significant according to the very small p-value (5.10e-06). It means that indeed family support works differently for girls and boys. 
+  - Beta shows how the beta for the girls changes when family support increases by 1 unit.  
+  - The 1 unit increase in family support leads to 0.11 increase in the effect of gender on life satisfaction. That means that for children with high level of family support the association between gender and life satisfaction is higher. 
+  
+- Adjusted R-squared for first model without interaction is 0.283 and for the second model with interaction effect Adjusted R-squared is 0.285, so the difference is not big. 
+  
+## Visualization of interaction effect
+
+```{r}
+library(sjPlot)
+library(ggplot2)
+plot_model(model_interaction, type="int", title = "Prediction of life satisfaction with interaction between family support and gender", colors = "Set1") + ylab("Life satisfaction") + 
+  theme_classic()
+```
+
+* For girls higher family support results in higher life satisfaction as confidence intervals do not overlap at all.
+* For boys changes in family support do not result in changes in life satisfaction as confidence intervals do overlap. 
+
+# Check for a non-linear effect in the model
+
+Let's try Box-Tidwell test to check whether the relationship between continuous predictors and outcome variable is linear. 
+
+(I do not know why, but this function does not work if I put several or all variables at once, but it is a common problem according to Stack overflow)
+
+```{r}
+library(car)
+boxTidwell(lifesat ~ famtalk + friendcounton, data = df)
+```
+
+* P-value here indicates whether our model will become significantly better if we transform the corresponding variables.
+
+* According to MLE of lambda, `famtalk` can be transformed to quadratic term as it equals approximately to 2, but we should not do transformation with `friendcounton` as MLE of lambda is too high (4), so there is no sense to do smth. 
+
+
+```{r}
+library(car)
+boxTidwell(lifesat ~ famhelp + friendtalk, data = df)
+```
+* `famhelp` has the corresponding very small p-value, but we should not do smth with this predictor as MLE of lambda is too high. 
+* p-value for `friendtalk` indicates that the model would not become significantly better if this variable is transformed. 
+
+```{r}
+library(car)
+boxTidwell(lifesat ~ famsup, data = df)
+```
+* `famsup` has the corresponding very small p-value, but we should not do smth with this predictor as MLE of lambda is too high. 
+
+```{r}
+boxTidwell(lifesat ~ friendhelp, data = df)
+```
+
+* `friendhelp` should be transformed to quadratic term as it equals approximately to 2.
+
+Therefore, `famtalk` and `friendhelp` indeed have quadratic relationship with dependent variable, rather than linear. 
+
+# Third model with quadratic transformation of `famtalk` & `friendhelp` 
+
+
+```{r}
+labs_2 <-  c("Constant", "Gender (Girl)", 
+                "Age category (13)", "Age category (15)", 
+            "Family help", "Family support", "Family talk", "Family talk^2", "Friends' help", "Friends' help^2", "Friends count on", "Friends Talk", "Teacher cares (Agree)", "Teacher cares (Neither agree/disagree)", "Teacher cares (Strongly disagree)", "Students are kind and helpful", "Liking school (Like a bit)", "Liking school (Not very much)", "Liking school (Not at all)", "Family well off (Quite well off)", "Family well off (Quite well off)", "Family well off (Average)", "Family well off (Not very well off)", "Family well off (Not at all well off)", "Family holidays (Once)", "Family holidays (Twice)", "Family holidays (More than twice)", "Has own bedroom (Yes)", "Gender(Girl)*Family support")
+
+
+model_3 <- lm(lifesat ~ sex + AGECAT + famhelp + famsup*sex + famtalk + I(famtalk^2) + friendhelp + I(friendhelp^2) + friendcounton + friendtalk + teachercare + studhelpful + likeschool + welloff + fasholidays + fasbedroom, data = df)
+
+
+tab_model(model_3, pred.labels = labs_2, dv.labels = "Life Satisfaction", title = "Linear regression with interaction: Factors that are associated with life satisfaction")
+```
+
+* Adjusted R-squared equals to 0.294, which is a little bit higher than for the second model with interaction effect that do not assume quadratic relationship (0.286).
+
+* P-values for both transformed variables indicate that there is actually a quadratic relationship between each of them and life satisfaction of finnish adolescents. 
+
+
+# Comparing models
+
+Choose the best model.
+
+```{r}
+anova(model_full, model_interaction, model_3)
+```
+
+The third model is the best at predicting life satisfaction of finnish adolescents according to small p-value and decreased RSS. 
+
+# Check problems in the best model
+
+## Normal distribution of residuals
+
+### Q-Q plot
+
+* ols_test_normality works only for sample size between 3 and 5000, but our equals to 5541, so let's skip it. 
+
+```{r}
+qqPlot(model_3, labels = row.names(lifesat), main = "Q-Q plot")
+```
+
+* As we see from the plot, many observations do not follow blue line and are out of its confidence intervals, especially at the bottom of the left side.
+
+* There are many observations above 2 SD and below -2 SD, which stands for extreme values of standardized residuals. So, model works poorly for observations above 2 SD and below -2 SD.  
+* For normal distribution 2 standard deviations above and below zero stands for 99% of all observations.
+
+
+```{r}
+ggplot(df, aes(residuals(model_3))) +
+  geom_density(fill = "#e5e5e5") + 
+labs(x = "Residuals",
+     y = " " ,
+     title = "Distribution of residuals") +
+   theme_classic()
+```
+
+* The distribution of residuals is skewed to the left as there is this heavy left tail.
+
+* I can conclude that residuals are not normally distributed.
+
+
+Let's look at outliers to see how much they are problematic in terms of the difference with other observations. 
+
+## Outliers
+
+```{r}
+outlierTest(model_3)
+```
+
+* There are 7 outliers in the data, which is a problem. 
+
+### Leverages 
+
+Leverages are the values that are very different from the rest of a sample. 
+
+```{r}
+head(hatvalues(model_3))
+plot(hatvalues(model_3))
+```
+
+Hat values should be close to 0. They show how far from the rest of observations certain observations. To determine whether such distribution is okay or nor let's draw threshold lines.
+
+(2,3)*((k + 1)/n), where k - number of beta-coefficients, n - sample size
+
+```{r}
+plot(hatvalues(model_3))
+abline(h = c(2,3)*32/5541, lty = 2)
+text(hatvalues(model_3), rownames(df$lifesat))
+```
+
+### Cook's distance 
+
+The model does not fit well for all observations located above the lines. 
+
+
+How much fitted values would change if we delete certain problematic observations. 
+
+```{r}
+plot(cooks.distance(model_3))
+```
+
+To determine the threshold we should apply the following function: 4/(n-k-1)
+
+```{r}
+plot(cooks.distance(model_3))
+abline(h=4/(5541 - 31 - 1), lty = 2) 
+```
+
+There are quite a lot of observation located above the dotted line - threshold. 
+
+Now let's try combine the result of cook's distance and hat values!
+
+```{r}
+plot(hatvalues(model_3), rstudent(model_3), type = "n")
+# threshold for residuals
+abline(h=c(-2, 0, 2), lty = 2)
+# threshold for leverages
+abline(v = c(2,3)*32/5541, lty = 2)
+cook <- sqrt(cooks.distance(model_3))
+points(hatvalues(model_3), rstudent(model_3), cex = 10*cook/max(cook))
+text(hatvalues(model_3), rstudent(model_3), rownames(df$lifesat))
+```
+
+As we can see there are a lot of observations which standardized residuals less than -2. The most problematic observations are in the bottom right part of rectangular and in the upper right part. Rectangular indicates the part where observations with high leverages lie. Problematic observations that are found by cook-distance are indicated by the big size of the nodes. 
+
+### Df beta
+
+Now let's look how much parameter estimates change
+
+```{r}
+dfbs <- dfbetas(model_3)
+plot(dfbs[, c(2,3)], pnc = 16)
+abline(v = 0, lty = 2)
+abline(h = 0, lty = 2)
+text(dfbs[,2] + 0.02, dfbs[,3], labels=row.names(df$lifesat), cex = 0.5)
+```
+
+On this example we see that there are many observations that are not around zeros.
+
+## Heteroscedasticity
+
+```{r}
+par(mfrow = c(1, 2))
+plot(fitted.values(model_3), rstudent(model_3))
+abline(h=0, lty=2)
+spreadLevelPlot(model_3) #blue line should be horizontal
+``` 
+
+
+Formal test
+
+```{r}
+ncvTest(model_3)
+```
+According to p-value, the model has non-constant error variance, which is really a problem. 
+
+## Multicollinearity
+
+```{r}
+vif(model_3)
+```
+There is a high vif (> 4) only for variables, `famtalk` and `friendhelp`, that were transformed to quadratic term, which is expected result.
+
+That's all, thanks a lot for reading this project!
+
